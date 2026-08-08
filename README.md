@@ -2,14 +2,14 @@
 
 ## Thành viên
 
-| STT |      MSSV    |      Họ và tên      | Vai trò |
-|---: |--------------|---------------------|---------|
-|  1  | 080206005119 | Nguyễn Minh Hưng    | |
-|  2  | 075207013475 | Trần Minh Đức       | |
-|  3  | 2251120375   | Nguyễn Hoàng Phúc   | |
-|  4  | 082206002720 | Trần Ngọc Đăng Khoa | |
-|  5  | 049206000438 | Võ Văn Tùng         | |
-|  6  | 075206021667  |Trần Đức Long       | |
+| STT |      MSSV    |      Họ và tên      |         Vai trò         |
+|---: |--------------|---------------------|-------------------------|
+|  1  | 080206005119 | Nguyễn Minh Hưng    | Command Execution       |
+|  2  | 075207013475 | Trần Minh Đức       | Client & GUI            |
+|  3  | 2251120375   | Nguyễn Hoàng Phúc   | Architecture & Protocol |
+|  4  | 082206002720 | Trần Ngọc Đăng Khoa | Server & Connection     |
+|  5  | 049206000438 | Võ Văn Tùng         | Timeout & Error Handling|
+|  6  | 075206021667 |Trần Đức Long       | Logging & Testing       |
 
 ## Giới thiệu
 
