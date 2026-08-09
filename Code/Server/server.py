@@ -8,24 +8,41 @@ server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((HOST, PORT))
 server_socket.listen(5)
 
-print("Máy chủ đang chạy tại cổng", PORT)
-print("Đang chờ máy khách kết nối...")
+print("=" * 45)
+print("              TCP SERVER")
+print("=" * 45)
+print(f"[SERVER] Dang chay tai cong {PORT}")
+print("[SERVER] Dang cho Client ket noi...")
+print()
 
 client_socket, client_address = server_socket.accept()
 
-print("Máy khách đã kết nối:", client_address)
+client_ip = client_address[0]
+client_port = client_address[1]
 
-data = client_socket.recv(1024)
+print(f"[CONNECT] Client: {client_ip}:{client_port}")
+print()
 
-message = data.decode("utf-8")
+while True:
+    data = client_socket.recv(1024)
 
-print("Nhận được từ máy khách:", message)
+    if not data:
+        print("[DISCONNECT] Client da ngat ket noi.")
+        break
 
-response = "Máy chủ đã nhận được dữ liệu."
+    message = data.decode("utf-8")
 
-client_socket.sendall(response.encode("utf-8"))
+    print(f"[RECV] {message}")
 
-print("Đã gửi phản hồi cho máy khách.")
+    response = "May chu da nhan duoc: " + message
+
+    client_socket.sendall(response.encode("utf-8"))
+
+    print(f"[SEND] {response}")
+    print()
 
 client_socket.close()
 server_socket.close()
+
+print("[SERVER] Da dong ket noi.")
+print("=" * 45)

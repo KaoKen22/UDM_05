@@ -5,20 +5,35 @@ PORT = 5000
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+print("=" * 45)
+print("             TCP CLIENT - TEST")
+print("=" * 45)
+
+print("[CLIENT] Dang ket noi Server...")
+
 client_socket.connect((HOST, PORT))
 
-print("Đã kết nối đến máy chủ.")
+print("[CLIENT] Ket noi thanh cong.")
+print()
 
-message = "Xin chào từ Client"
+while True:
+    message = input("[CLIENT] Nhap du lieu: ")
 
-client_socket.sendall(message.encode("utf-8"))
+    if message.lower() == "thoat":
+        break
 
-print("Đã gửi dữ liệu đến máy chủ.")
+    client_socket.sendall(message.encode("utf-8"))
 
-response = client_socket.recv(1024)
+    print(f"[SEND] {message}")
 
-message = response.decode("utf-8")
+    response = client_socket.recv(1024)
 
-print("Phản hồi từ máy chủ:", message)
+    response_message = response.decode("utf-8")
+
+    print(f"[RECV] {response_message}")
+    print()
 
 client_socket.close()
+
+print("[CLIENT] Da ngat ket noi.")
+print("=" * 45)
