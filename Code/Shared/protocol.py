@@ -36,3 +36,6 @@ def parse_response(data_str: str) -> dict:
         return json.loads(data_str)
     except Exception:
         return {"status": STATUS_ERROR, "output": "", "message": "Dữ liệu không hợp lệ"}
+
+
+    
