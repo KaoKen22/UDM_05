@@ -46,7 +46,7 @@ def execute_command(user_input: str) -> dict:
 
     try:
         result = subprocess.run(
-            tokens,
+            tokens,s
             capture_output=True,
             text=True,
             timeout=10,
