@@ -46,10 +46,10 @@ def execute_command(user_input: str) -> dict:
 
     try:
         result = subprocess.run(
-            tokens,s
+            tokens,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=15,
             shell=False
         )
         return {
@@ -61,7 +61,13 @@ def execute_command(user_input: str) -> dict:
         return {
             "exit_code": -1,
             "output": "",
-            "error": "Command execution timed out."
+            "error": "Command execution timed out (15s)."
+        }
+    except FileNotFoundError:
+        return {
+            "exit_code": -1,
+            "output": "",
+            "error": f"Lệnh '{tokens[0]}' không tồn tại hoặc không hỗ trợ khi shell=False."
         }
     except Exception as e:
         return {
@@ -69,3 +75,9 @@ def execute_command(user_input: str) -> dict:
             "output": "",
             "error": str(e)
         }
+
+
+if __name__ == "__main__":
+    print("Test 1 (hostname):", execute_command("hostname"))
+    print("Test 2 (ping 127.0.0.1):", execute_command("ping 127.0.0.1"))
+    print("Test 3 (Lỗi cấm nối lệnh):", execute_command("ipconfig && whoami"))
