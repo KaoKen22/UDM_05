@@ -1,5 +1,27 @@
 import socket
-import json
+import sys
+import os
+
+sys.path.append(
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "Shared"
+        )
+    )
+)
+
+from protocol import (
+    ACTION_EXECUTE,
+    ACTION_LIST_DIR,
+    ACTION_DISCONNECT,
+    STATUS_SUCCESS,
+    STATUS_ERROR,
+    parse_request,
+    build_response
+)
+
+from command_execution import execute_command
+
 
 HOST = "0.0.0.0"
 PORT = 5000
@@ -16,6 +38,7 @@ print(f"[SERVER] Dang chay tai cong {PORT}")
 print("[SERVER] Dang cho Client ket noi...")
 print()
 
+
 while True:
     client_socket, client_address = server_socket.accept()
 
@@ -26,7 +49,7 @@ while True:
     print()
 
     while True:
-        data = client_socket.recv(1024)
+        data = client_socket.recv(4096)
 
         if not data:
             print("[DISCONNECT] Client da ngat ket noi.")
@@ -36,54 +59,95 @@ while True:
 
         print(f"[RECV] {message}")
 
-        try:
-            request = json.loads(message)
+        # Phân tích request JSON
+        request = parse_request(message)
 
-            action = request.get("action", "")
-            command = request.get("command", "")
+        action = request.get("action", "")
+        payload = request.get("payload", {})
 
-            print(f"[ACTION] {action}")
+        print(f"[ACTION] {action}")
+
+        # EXECUTE
+
+        if action == ACTION_EXECUTE:
+
+            command = payload.get("command", "")
+
             print(f"[COMMAND] {command}")
+            print("[EXECUTE] Dang thuc thi lenh...")
 
-            if action == "DISCONNECT":
-                print("[DISCONNECT] Client yeu cau ngat ket noi.")
-                break
+            result = execute_command(command)
 
-            if action == "EXECUTE":
-                print("[EXECUTE] Server nhan yeu cau thuc thi lenh.")
-
-                response = json.dumps({
-                    "status": "SUCCESS",
-                    "output": "",
-                    "message": "Server da nhan yeu cau thuc thi"
-                })
-
-                client_socket.sendall(response.encode("utf-8"))
-
-                print(f"[SEND] {response}")
-                print()
-
-                continue
-
-            response = json.dumps({
-                "status": "ERROR",
-                "output": "",
-                "message": "Action khong hop le"
-            })
+            if result["exit_code"] == 0:
+                response = build_response(
+                    STATUS_SUCCESS,
+                    result["output"],
+                    "Thuc thi lenh thanh cong"
+                )
+            else:
+                response = build_response(
+                    STATUS_ERROR,
+                    result["error"],
+                    "Thuc thi lenh that bai"
+                )
 
             client_socket.sendall(response.encode("utf-8"))
 
             print(f"[SEND] {response}")
             print()
 
-        except json.JSONDecodeError:
-            print("[ERROR] Du lieu JSON khong hop le.")
+        # LIST_DIR
 
-            response = json.dumps({
-                "status": "ERROR",
-                "output": "",
-                "message": "Du lieu JSON khong hop le"
-            })
+        elif action == ACTION_LIST_DIR:
+
+            path = payload.get("path", ".")
+
+            print(f"[LIST_DIR] Path: {path}")
+
+            result = execute_command(f"dir {path}")
+
+            if result["exit_code"] == 0:
+                response = build_response(
+                    STATUS_SUCCESS,
+                    result["output"],
+                    "Lay danh sach thu muc thanh cong"
+                )
+            else:
+                response = build_response(
+                    STATUS_ERROR,
+                    result["error"],
+                    "Khong the lay danh sach thu muc"
+                )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print(f"[SEND] {response}")
+            print()
+
+        # DISCONNECT
+
+        elif action == ACTION_DISCONNECT:
+
+            response = build_response(
+                STATUS_SUCCESS,
+                "",
+                "Server da ngat ket noi"
+            )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print("[DISCONNECT] Client yeu cau ngat ket noi.")
+            break
+
+        # ACTION KHONG HOP LE
+
+        else:
+
+            response = build_response(
+                STATUS_ERROR,
+                "",
+                "Action khong hop le"
+            )
 
             client_socket.sendall(response.encode("utf-8"))
 
