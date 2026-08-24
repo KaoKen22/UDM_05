@@ -76,8 +76,3 @@ def execute_command(user_input: str) -> dict:
             "error": str(e)
         }
 
-
-if __name__ == "__main__":
-    print("Test 1 (hostname):", execute_command("hostname"))
-    print("Test 2 (ping 127.0.0.1):", execute_command("ping 127.0.0.1"))
-    print("Test 3 (Lỗi cấm nối lệnh):", execute_command("ipconfig && whoami"))
