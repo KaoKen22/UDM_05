@@ -1,4 +1,27 @@
 import socket
+import sys
+import os
+
+sys.path.append(
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__), "..", "Shared"
+        )
+    )
+)
+
+from protocol import (
+    ACTION_EXECUTE,
+    ACTION_LIST_DIR,
+    ACTION_DISCONNECT,
+    STATUS_SUCCESS,
+    STATUS_ERROR,
+    parse_request,
+    build_response
+)
+
+from command_execution import execute_command
+
 
 HOST = "0.0.0.0"
 PORT = 5000
@@ -15,34 +38,123 @@ print(f"[SERVER] Dang chay tai cong {PORT}")
 print("[SERVER] Dang cho Client ket noi...")
 print()
 
-client_socket, client_address = server_socket.accept()
-
-client_ip = client_address[0]
-client_port = client_address[1]
-
-print(f"[CONNECT] Client: {client_ip}:{client_port}")
-print()
 
 while True:
-    data = client_socket.recv(1024)
+    client_socket, client_address = server_socket.accept()
 
-    if not data:
-        print("[DISCONNECT] Client da ngat ket noi.")
-        break
+    client_ip = client_address[0]
+    client_port = client_address[1]
 
-    message = data.decode("utf-8")
-
-    print(f"[RECV] {message}")
-
-    response = "May chu da nhan duoc: " + message
-
-    client_socket.sendall(response.encode("utf-8"))
-
-    print(f"[SEND] {response}")
+    print(f"[CONNECT] Client: {client_ip}:{client_port}")
     print()
 
-client_socket.close()
-server_socket.close()
+    while True:
+        data = client_socket.recv(4096)
 
-print("[SERVER] Da dong ket noi.")
-print("=" * 45)
+        if not data:
+            print("[DISCONNECT] Client da ngat ket noi.")
+            break
+
+        message = data.decode("utf-8")
+
+        print(f"[RECV] {message}")
+
+        # Phân tích request JSON
+        request = parse_request(message)
+
+        action = request.get("action", "")
+        payload = request.get("payload", {})
+
+        print(f"[ACTION] {action}")
+
+        # EXECUTE
+
+        if action == ACTION_EXECUTE:
+
+            command = payload.get("command", "")
+
+            print(f"[COMMAND] {command}")
+            print("[EXECUTE] Dang thuc thi lenh...")
+
+            result = execute_command(command)
+
+            if result["exit_code"] == 0:
+                response = build_response(
+                    STATUS_SUCCESS,
+                    result["output"],
+                    "Thuc thi lenh thanh cong"
+                )
+            else:
+                response = build_response(
+                    STATUS_ERROR,
+                    result["error"],
+                    "Thuc thi lenh that bai"
+                )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print(f"[SEND] {response}")
+            print()
+
+        # LIST_DIR
+
+        elif action == ACTION_LIST_DIR:
+
+            path = payload.get("path", ".")
+
+            print(f"[LIST_DIR] Path: {path}")
+
+            result = execute_command(f"dir {path}")
+
+            if result["exit_code"] == 0:
+                response = build_response(
+                    STATUS_SUCCESS,
+                    result["output"],
+                    "Lay danh sach thu muc thanh cong"
+                )
+            else:
+                response = build_response(
+                    STATUS_ERROR,
+                    result["error"],
+                    "Khong the lay danh sach thu muc"
+                )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print(f"[SEND] {response}")
+            print()
+
+        # DISCONNECT
+
+        elif action == ACTION_DISCONNECT:
+
+            response = build_response(
+                STATUS_SUCCESS,
+                "",
+                "Server da ngat ket noi"
+            )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print("[DISCONNECT] Client yeu cau ngat ket noi.")
+            break
+
+        # ACTION KHONG HOP LE
+
+        else:
+
+            response = build_response(
+                STATUS_ERROR,
+                "",
+                "Action khong hop le"
+            )
+
+            client_socket.sendall(response.encode("utf-8"))
+
+            print(f"[SEND] {response}")
+            print()
+
+    client_socket.close()
+
+    print("[SERVER] Dang cho Client tiep theo...")
+    print()

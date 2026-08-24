@@ -1,0 +1,170 @@
+import tkinter as tk
+from tkinter import ttk
+import socket
+
+client = None
+
+def connect_server():
+    global client
+
+    ip = ip_entry.get()
+    port = int(port_entry.get())
+
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((ip, port))
+
+        status_label.config(text="Đã kết nối Server")
+        terminal.insert(tk.END, "Đã kết nối Server.\n")
+
+    except:
+        status_label.config(text="Kết nối thất bại")
+        client = None
+
+def disconnect_server():
+    global client
+
+    if client != None:
+        client.close()
+        client = None
+
+    status_label.config(text="Đã ngắt kết nối")
+    terminal.insert(tk.END, "Đã ngắt kết nối.\n")
+
+
+def send_command():
+    global client
+
+    command = command_entry.get()
+
+    if client == None:
+        terminal.insert(tk.END, "Chưa kết nối Server.\n")
+        return
+
+    if command == "":
+        return
+
+    try:
+        terminal.insert(tk.END, "> " + command + "\n")
+
+        client.send(command.encode())
+
+        result = client.recv(4096).decode()
+
+        terminal.insert(tk.END, result + "\n")
+        terminal.see(tk.END)
+
+        command_entry.delete(0, tk.END)
+
+    except:
+        terminal.insert(tk.END, "Lỗi gửi lệnh.\n")
+
+window = tk.Tk()
+window.title("TCP Client")
+window.geometry("600x650")
+
+
+tk.Label(
+    window,
+    text="TCP CLIENT",
+    font=("Arial", 18)
+).pack(pady=15)
+
+tk.Label(
+    window,
+    text="Server IP"
+).pack()
+
+ip_entry = tk.Entry(window)
+ip_entry.insert(0, "127.0.0.1")
+ip_entry.pack()
+
+tk.Label(
+    window,
+    text="Port"
+).pack()
+
+port_entry = tk.Entry(window)
+port_entry.insert(0, "5000")
+port_entry.pack()
+
+tk.Button(
+    window,
+    text="CONNECT",
+    command=connect_server
+).pack(pady=8)
+
+
+tk.Button(
+    window,
+    text="DISCONNECT",
+    command=disconnect_server
+).pack()
+
+status_label = tk.Label(
+    window,
+    text="Chưa kết nối"
+)
+
+status_label.pack(pady=10)
+
+tabs = ttk.Notebook(window)
+tabs.pack(
+    fill="both",
+    expand=True,
+    padx=10,
+    pady=10
+)
+
+terminal_tab = tk.Frame(tabs)
+
+tabs.add(
+    terminal_tab,
+    text="Terminal"
+)
+
+terminal = tk.Text(
+    terminal_tab,
+    bg="black",
+    fg="white",
+    height=15
+)
+
+terminal.pack(
+    fill="both",
+    expand=True,
+    padx=5,
+    pady=5
+)
+
+command_frame = tk.Frame(terminal_tab)
+
+command_frame.pack(
+    fill="x",
+    padx=5,
+    pady=5
+)
+
+
+tk.Label(
+    command_frame,
+    text="Command:"
+).pack(side="left")
+
+
+command_entry = tk.Entry(command_frame)
+
+command_entry.pack(
+    side="left",
+    fill="x",
+    expand=True,
+    padx=5
+)
+
+tk.Button(
+    command_frame,
+    text="SEND",
+    command=send_command
+).pack(side="right")
+
+window.mainloop()
