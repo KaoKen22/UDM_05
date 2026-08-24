@@ -75,4 +75,3 @@ def execute_command(user_input: str) -> dict:
             "output": "",
             "error": str(e)
         }
-
