@@ -1,0 +1,29 @@
+import logging
+import os
+from datetime import datetime
+
+#Tao thu muc log neu chua co
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "server.log")
+#Cau hinh logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+ def log_info(message: str):
+    logging.info(message)
+def log_error(message: str):
+    logging.error(message)
+def log_warning(message: str):
+   logging.warning(message)
+def log_cmd_execution(client_ip: str, command: str, status: str, exit_code: int):
+     log_msg = f"[CMD_EXEC] IP={client_ip} | CMD='{command}' | STATUS={status} | EXIT_CODE={exit_code}"
+    if exit_code == 0:
+        log_info(log_msg)
+    else:
+        log_error(log_msg)
