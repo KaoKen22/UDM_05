@@ -218,7 +218,8 @@ while True:
 
     client_thread = threading.Thread(
         target=handle_client,
-        args=(client_socket, client_address)
+        args=(client_socket, client_address),
+        daemon=True
     )
 
     client_thread.start()
