@@ -1,5 +1,7 @@
 import subprocess
 import shlex
+import shutil
+import platform
 
 ALLOWED_COMMANDS = {
     "ping",
@@ -13,6 +15,8 @@ ALLOWED_COMMANDS = {
 }
 
 FORBIDDEN_CHARS = [";", "&&", "||", "|", "`", "$", ">", "<"]
+
+WINDOWS_BUILTINS = {"dir", "echo"}
 
 def validate_command(user_input: str):
     if not user_input or not user_input.strip():
@@ -45,6 +49,18 @@ def execute_command(user_input: str) -> dict:
         }
 
     try:
+        if platform.system().lower().startswith("win"):
+            cmd0 = tokens[0].lower()
+            if cmd0 == "ls":
+                tokens = ["cmd", "/c", "dir"] + tokens[1:]
+            elif cmd0 in WINDOWS_BUILTINS:
+                tokens = ["cmd", "/c"] + tokens
+
+    # Check executable exists (skip 'cmd')
+        if tokens and tokens[0].lower() != "cmd":
+            if shutil.which(tokens[0]) is None:
+                return {"exit_code": 1, "output": "", "error": f"Executable not found: {tokens[0]}"}
+
         result = subprocess.run(
             tokens,
             capture_output=True,
