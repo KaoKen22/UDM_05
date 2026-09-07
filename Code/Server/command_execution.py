@@ -6,19 +6,17 @@ import os
 import time
 
 try:
-    import psutil  # pyright: ignore[reportMissingModuleSource]
+    import psutil
 except Exception:
     psutil = None
 
 ALLOWED_COMMANDS = {
     "ping",
     "ipconfig",
-    "ifconfig",
     "hostname",
     "whoami",
     "dir",
-    "ls",
-    "echo"
+    "echo",
 }
 
 FORBIDDEN_CHARS = [";", "&&", "||", "|", "`", "$", ">", "<"]
@@ -56,9 +54,7 @@ def execute_command(user_input: str) -> dict:
         }
     if platform.system().lower().startswith("win"):
         cmd0 = tokens[0].lower()
-        if cmd0 == "ls":
-            tokens = ["cmd", "/c", "dir"] + tokens[1:]
-        elif cmd0 in WINDOWS_BUILTINS:
+        if cmd0 in WINDOWS_BUILTINS:
             tokens = ["cmd", "/c"] + tokens
 
     if tokens and tokens[0].lower() != "cmd":
@@ -69,10 +65,6 @@ def execute_command(user_input: str) -> dict:
 
 
 def run_real_command(tokens, timeout=15) -> dict:
-    """Thực thi lệnh thật bằng subprocess.check_output và trả về dict kết quả.
-
-    tokens: danh sách hoặc chuỗi (nếu là chuỗi sẽ được tách)
-    """
     if isinstance(tokens, str):
         try:
             tokens = shlex.split(tokens)
@@ -100,7 +92,6 @@ def run_real_command(tokens, timeout=15) -> dict:
 
 
 def list_files(path: str = ".") -> dict:
-    """Trả về một dict chứa danh sách file trong đường dẫn (hàm trợ giúp đơn giản)."""
     try:
         items = os.listdir(path)
         return {"success": True, "files": items}
@@ -109,7 +100,6 @@ def list_files(path: str = ".") -> dict:
 
 
 def kill_process(pid, force: bool = False) -> dict:
-    """Cố gắng dừng tiến trình theo PID. Dùng psutil nếu có, nếu không dùng taskkill trên Windows hoặc os.kill trên Unix."""
     try:
         pid_int = int(pid)
     except Exception:
