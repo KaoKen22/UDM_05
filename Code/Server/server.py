@@ -22,6 +22,7 @@ from protocol import (
 )
 
 from command_execution import execute_command
+from logger import logger
 
 
 HOST = "0.0.0.0"
@@ -33,9 +34,13 @@ def handle_client(client_socket, client_address):
     client_ip = client_address[0]
     client_port = client_address[1]
 
-    print(f"[CONNECT] Client: {client_ip}:{client_port}")
-    print(f"[THREAD] Dang xu ly Client {client_ip}:{client_port}")
-    print()
+    logger.info(
+        f"[CONNECT] Client: {client_ip}:{client_port}"
+    )
+
+    logger.info(
+        f"[THREAD] Dang xu ly Client {client_ip}:{client_port}"
+    )
 
     try:
 
@@ -44,15 +49,17 @@ def handle_client(client_socket, client_address):
             data = client_socket.recv(4096)
 
             if not data:
-                print(
+
+                logger.info(
                     f"[DISCONNECT] Client {client_ip}:{client_port} "
                     "da ngat ket noi."
                 )
+
                 break
 
             message = data.decode("utf-8")
 
-            print(f"[RECV] {message}")
+            logger.debug(f"[RECV] {message}")
 
             # Phan tich request JSON
             request = parse_request(message)
@@ -60,7 +67,7 @@ def handle_client(client_socket, client_address):
             action = request.get("action", "")
             payload = request.get("payload", {})
 
-            print(f"[ACTION] {action}")
+            logger.info(f"[ACTION] {action}")
 
             # EXECUTE
 
@@ -68,8 +75,8 @@ def handle_client(client_socket, client_address):
 
                 command = payload.get("command", "")
 
-                print(f"[COMMAND] {command}")
-                print("[EXECUTE] Dang thuc thi lenh...")
+                logger.info(f"[COMMAND] {command}")
+                logger.info("[EXECUTE] Dang thuc thi lenh...")
 
                 result = execute_command(command)
 
@@ -81,6 +88,10 @@ def handle_client(client_socket, client_address):
                         "Thuc thi lenh thanh cong"
                     )
 
+                    logger.info(
+                        "[EXECUTE] Thuc thi lenh thanh cong."
+                    )
+
                 else:
 
                     response = build_response(
@@ -89,12 +100,16 @@ def handle_client(client_socket, client_address):
                         "Thuc thi lenh that bai"
                     )
 
+                    logger.warning(
+                        f"[EXECUTE] Thuc thi lenh that bai. "
+                        f"Exit code: {result['exit_code']}"
+                    )
+
                 client_socket.sendall(
                     response.encode("utf-8")
                 )
 
-                print(f"[SEND] {response}")
-                print()
+                logger.debug(f"[SEND] {response}")
 
             # LIST_DIR
 
@@ -102,9 +117,11 @@ def handle_client(client_socket, client_address):
 
                 path = payload.get("path", ".")
 
-                print(f"[LIST_DIR] Path: {path}")
+                logger.info(f"[LIST_DIR] Path: {path}")
 
-                result = execute_command(f"dir {path}")
+                result = execute_command(
+                    f"dir {path}"
+                )
 
                 if result["exit_code"] == 0:
 
@@ -112,6 +129,10 @@ def handle_client(client_socket, client_address):
                         STATUS_SUCCESS,
                         result["output"],
                         "Lay danh sach thu muc thanh cong"
+                    )
+
+                    logger.info(
+                        "[LIST_DIR] Lay danh sach thu muc thanh cong."
                     )
 
                 else:
@@ -122,12 +143,15 @@ def handle_client(client_socket, client_address):
                         "Khong the lay danh sach thu muc"
                     )
 
+                    logger.warning(
+                        "[LIST_DIR] Khong the lay danh sach thu muc."
+                    )
+
                 client_socket.sendall(
                     response.encode("utf-8")
                 )
 
-                print(f"[SEND] {response}")
-                print()
+                logger.debug(f"[SEND] {response}")
 
             # DISCONNECT
 
@@ -143,10 +167,12 @@ def handle_client(client_socket, client_address):
                     response.encode("utf-8")
                 )
 
-                print(
+                logger.info(
                     f"[DISCONNECT] Client {client_ip}:{client_port} "
                     "yeu cau ngat ket noi."
                 )
+
+                logger.debug(f"[SEND] {response}")
 
                 break
 
@@ -164,32 +190,34 @@ def handle_client(client_socket, client_address):
                     response.encode("utf-8")
                 )
 
-                print(f"[SEND] {response}")
-                print()
+                logger.warning(
+                    f"[ACTION] Action khong hop le: {action}"
+                )
+
+                logger.debug(f"[SEND] {response}")
 
     except ConnectionResetError:
 
-        print(
+        logger.warning(
             f"[DISCONNECT] Client {client_ip}:{client_port} "
             "ngat ket noi dot ngot."
         )
 
     except Exception as error:
 
-        print(
-            f"[ERROR] Client {client_ip}:{client_port}: {error}"
+        logger.error(
+            f"[ERROR] Client {client_ip}:{client_port}: {error}",
+            exc_info=True
         )
 
     finally:
 
         client_socket.close()
 
-        print(
+        logger.info(
             f"[THREAD] Ket thuc xu ly Client "
             f"{client_ip}:{client_port}"
         )
-
-        print()
 
 
 # Tao Socket Server
@@ -199,16 +227,18 @@ server_socket = socket.socket(
     socket.SOCK_STREAM
 )
 
-server_socket.bind((HOST, PORT))
+server_socket.bind(
+    (HOST, PORT)
+)
+
 server_socket.listen(5)
 
 
-print("=" * 45)
-print("              TCP SERVER")
-print("=" * 45)
-print(f"[SERVER] Dang chay tai cong {PORT}")
-print("[SERVER] Dang cho Client ket noi...")
-print()
+logger.info("=" * 45)
+logger.info("              TCP SERVER")
+logger.info("=" * 45)
+logger.info(f"[SERVER] Dang chay tai cong {PORT}")
+logger.info("[SERVER] Dang cho Client ket noi...")
 
 
 # Cho nhieu Client ket noi
@@ -219,9 +249,9 @@ while True:
 
     # Yeu cau nguoi dung tai Server cho phep Client
 
-    print("=" * 45)
+    logger.info("=" * 45)
 
-    print(
+    logger.info(
         f"[REQUEST] Client {client_address[0]}:"
         f"{client_address[1]} yeu cau ket noi."
     )
@@ -244,19 +274,25 @@ while True:
             response.encode("utf-8")
         )
 
-        print("[PERMISSION] Da tu choi Client.")
+        logger.warning(
+            f"[PERMISSION] Client {client_address[0]}:"
+            f"{client_address[1]} bi tu choi."
+        )
 
         client_socket.close()
 
-        print("[SERVER] Dang cho Client tiep theo...")
-        print()
+        logger.info(
+            "[SERVER] Dang cho Client tiep theo..."
+        )
 
         continue
 
     # Chap nhan Client
 
-    print("[PERMISSION] Da cho phep Client.")
-    print()
+    logger.info(
+        f"[PERMISSION] Client {client_address[0]}:"
+        f"{client_address[1]} da duoc cho phep."
+    )
 
     client_thread = threading.Thread(
         target=handle_client,
@@ -266,10 +302,11 @@ while True:
 
     client_thread.start()
 
-    print(
+    logger.info(
         f"[SERVER] Da tao Thread cho Client "
         f"{client_address[0]}:{client_address[1]}"
     )
 
-    print("[SERVER] Dang cho Client tiep theo...")
-    print()
+    logger.info(
+        "[SERVER] Dang cho Client tiep theo..."
+    )
