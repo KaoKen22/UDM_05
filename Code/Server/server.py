@@ -188,6 +188,7 @@ def handle_client(client_socket, client_address):
             f"[THREAD] Ket thuc xu ly Client "
             f"{client_ip}:{client_port}"
         )
+
         print()
 
 
@@ -216,6 +217,47 @@ while True:
 
     client_socket, client_address = server_socket.accept()
 
+    # Yeu cau nguoi dung tai Server cho phep Client
+
+    print("=" * 45)
+
+    print(
+        f"[REQUEST] Client {client_address[0]}:"
+        f"{client_address[1]} yeu cau ket noi."
+    )
+
+    permission = input(
+        "[PERMISSION] Cho phep Client? (y/n): "
+    )
+
+    # Tu choi Client
+
+    if permission.lower() != "y":
+
+        response = build_response(
+            STATUS_ERROR,
+            "",
+            "Ket noi bi tu choi boi Server"
+        )
+
+        client_socket.sendall(
+            response.encode("utf-8")
+        )
+
+        print("[PERMISSION] Da tu choi Client.")
+
+        client_socket.close()
+
+        print("[SERVER] Dang cho Client tiep theo...")
+        print()
+
+        continue
+
+    # Chap nhan Client
+
+    print("[PERMISSION] Da cho phep Client.")
+    print()
+
     client_thread = threading.Thread(
         target=handle_client,
         args=(client_socket, client_address),
@@ -228,5 +270,6 @@ while True:
         f"[SERVER] Da tao Thread cho Client "
         f"{client_address[0]}:{client_address[1]}"
     )
+
     print("[SERVER] Dang cho Client tiep theo...")
     print()
