@@ -1,68 +1,57 @@
 import socket
 
-#Bắt lỗi khi khởi tạo và lắng nghe kết nối Server (bind, listen).
-def safe_bind_and_listen(sock: socket.socket, host: str, port: int, backlog: int = 5) -> bool:
-    try:
-        sock.bind((host, port))
-        sock.listen(backlog)
-        return True
-    except socket.gaierror:
-        print("[ERROR] Địa chỉ IP/HOST không hợp lệ.")
-    except OSError as e:
-        print(f"[ERROR] Cổng Port {port} đã được sử dụng hoặc lỗi hệ thống: {e}")
-    except socket.error as e:
-        print(f"[ERROR] Lỗi khởi tạo Server Socket: {e}")
-    return False
+# 1. Custom Exception cho câu lệnh sai
 
-#Bắt lỗi khi Client kết nối tới Server (connect).
-def safe_connect(sock: socket.socket, host: str, port: int) -> bool:
-    try:
-        sock.connect((host, port))
-        return True
-    except ConnectionRefusedError:
-        print("[ERROR] Kết nối bị từ chối. Server chưa bật hoặc sai Port.")
-    except socket.gaierror:
-        print("[ERROR] Địa chỉ IP/HOST không hợp lệ.")
-    except socket.timeout:
-        print("[ERROR] Quá thời gian chờ kết nối (Timeout).")
-    except socket.error as e:
-        print(f"[ERROR] Không thể kết nối tới Server: {e}")
-    return False
-
-#Bắt lỗi khi nhận dữ liệu (recv) bao gồm ngắt kết nối và timeout.
-def safe_recv(sock: socket.socket, buffer_size: int = 1024) -> bytes | None:
-    try:
-        data = sock.recv(buffer_size)
-        if not data:
-            print("[INFO] Đối phương đã chủ động ngắt kết nối (EOF).")
-            return b""
-        return data
-    except (ConnectionResetError, BrokenPipeError):
-        print("[ERROR] Đối phương bị ngắt kết nối đột ngột!")
-    except socket.timeout:
-        print("[ERROR] Quá thời gian chờ nhận dữ liệu (Timeout).")
-    except socket.error as e:
-        print(f"[ERROR] Lỗi khi nhận dữ liệu: {e}")
-    return None
-
-#Bắt lỗi khi gửi dữ liệu (sendall) bao gồm mất kết nối.
-def safe_send(sock: socket.socket, data: bytes) -> bool:
-    try:
-        sock.sendall(data)
-        return True
-    except (ConnectionResetError, BrokenPipeError):
-        print("[ERROR] Không thể gửi! Mất kết nối tới đối phương.")
-    except socket.timeout:
-        print("[ERROR] Quá thời gian chờ gửi dữ liệu (Timeout).")
-    except socket.error as e:
-        print(f"[ERROR] Lỗi khi gửi dữ liệu: {e}")
-    return False
+class InvalidCommandError(Exception):
+    """Ngoại lệ bắn ra khi Client gửi câu lệnh không tồn tại hoặc không hợp lệ."""
+    def __init__(self, command: str, message: str = "Câu lệnh không tồn tại hoặc không được hỗ trợ!"):
+        self.command = command
+        self.message = f"{message} (Lệnh nhận được: '{command}')"
+        super().__init__(self.message)
 
 
-def safe_close(sock: socket.socket) -> None:
-    if sock:
-        try:
-            sock.close()
-            print("[INFO] Đã đóng Socket an toàn.")
-        except socket.error as e:
-            print(f"[ERROR] Lỗi khi đóng Socket: {e}")
+# 2. Xử lý Exception chính (try...except handler)
+
+def handle_exception(e: Exception) -> str:
+    """
+    Phân loại và bắt ngoại lệ từ khối try...except, 
+    trả về thông điệp lỗi dạng chuỗi thân thiện người dùng.
+    """
+    # Nhóm 1: Bắt lỗi khi Client gửi câu lệnh sai
+    if isinstance(e, InvalidCommandError):
+        return f"[LỖI LỆNH] {e.message}"
+
+    # Nhóm 2: Bắt lỗi try...except cơ bản khi Khởi tạo & Kết nối
+    elif isinstance(e, ConnectionRefusedError):
+        return "[LỖI KHỞI TẠO] Không thể kết nối. Server chưa bật hoặc sai Port."
+    
+    elif isinstance(e, socket.gaierror):
+        return "[LỖI KHỞI TẠO] Địa chỉ IP/HOST không hợp lệ."
+        
+    elif isinstance(e, OSError) and e.errno == 98:  # Address already in use
+        return "[LỖI KHỞI TẠO] Cổng (Port) đã được sử dụng bởi ứng dụng khác."
+
+    # Nhóm 3: Bắt lỗi Ngắt kết nối đột ngột & Timeout
+    elif isinstance(e, (ConnectionResetError, BrokenPipeError)):
+        return "[LỖI NGẮT KẾT NỐI] Đối phương đã ngắt kết nối đột ngột!"
+        
+    elif isinstance(e, socket.timeout):
+        return "[LỖI TIMEOUT] Quá thời gian chờ phản hồi từ Socket."
+        
+    elif isinstance(e, socket.error):
+        return f"[LỖI SOCKET] Lỗi kết nối mạng: {e}"
+
+    # Các lỗi ngoài dự tính
+    else:
+        return f"[LỖI KHÔNG XÁC ĐỊNH] {e}"
+
+
+# 3. Hàm bổ trợ validation câu lệnh Client
+
+def validate_command(action: str, allowed_actions: list) -> None:
+    """
+    Kiểm tra câu lệnh nhận từ Client. 
+    Nếu câu lệnh sai hoặc không nằm trong danh sách cho phép -> Bắn InvalidCommandError.
+    """
+    if not action or action not in allowed_actions:
+        raise InvalidCommandError(command=action)
