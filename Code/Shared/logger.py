@@ -1,30 +1,47 @@
 import logging
 import os
-from datetime import datetime
-#Tao thu muc log
-LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOG_DIR, "server.log")
-#kiem tra cau hinh
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+import sys
 
-def log_info(message: str):
-    logging.info(message)
-def log_error(message: str):
-    logging.error(message)
-def log_warning(message: str):
-    logging.warning(message)
-def log_cmd_execution(client_ip: str, command: str, status: str, exit_code: int):
+LOGGER_NAME = "UDM_SERVER"
+LOG_FILE_NAME = "server.log"
 
-    log_msg = f"[CMD_EXEC] IP={client_ip} | CMD='{command}' | STATUS={status} | EXIT_CODE={exit_code}"
-    if exit_code == 0:
-        log_info(log_msg)
-    else:
-        log_error(log_msg)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE_PATH = os.path.join(BASE_DIR, LOG_FILE_NAME)
+
+
+def setup_logger() -> logging.Logger:
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+
+    if logger.handlers:
+        return logger
+
+    formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)-8s | %(threadName)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(LOG_FILE_PATH, mode="a", encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+logger = setup_logger()
+
+
+if __name__ == "__main__":
+    logger.debug("Debug log.")
+    logger.info("Server starting.")
+    logger.warning("Warning log.")
+    logger.error("Error log.")
+    logger.critical("Critical log.")
