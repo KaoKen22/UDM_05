@@ -1,252 +1,635 @@
 import tkinter as tk
 from tkinter import ttk
 import socket
+import sys
+import os
+
+sys.path.append(
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "Shared"
+        )
+    )
+)
+
+from protocol import (
+    build_execute_request,
+    build_list_dir_request,
+    build_request,
+    parse_response,
+    ACTION_DISCONNECT
+)
 
 client = None
 
 def receive_data():
-    data = b""
 
-    client.settimeout(0.5)
-
-    try:
-        while True:
-            part = client.recv(4096)
-
-            if not part:
-                break
-
-            data += part
-
-    except:
-        pass
-
-    client.settimeout(None)
-
-    return data.decode("utf-8", errors="ignore")
-
-
-def connect_server():
     global client
 
-    ip = ip_entry.get()
-    port = int(port_entry.get())
+    if client is None:
+        return ""
 
     try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.connect((ip, port))
+        data = client.recv(65536)
 
-        status_label.config(text="Đã kết nối Server")
-        terminal.insert(tk.END, "Đã kết nối Server.\n")
+        if not data:
+            return ""
 
-    except:
-        status_label.config(text="Kết nối thất bại")
+        return data.decode("utf-8")
+
+    except socket.timeout:
+        return ""
+
+    except Exception:
+        return ""
+def connect_server():
+
+    global client
+
+    if client is not None:
+        status_label.config(
+            text="Đã kết nối"
+        )
+        return
+
+    ip = ip_entry.get().strip()
+
+    try:
+        port = int(port_entry.get())
+
+    except ValueError:
+        status_label.config(
+            text="Port không hợp lệ"
+        )
+        return
+
+    try:
+        client = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_STREAM
+        )
+
+        client.settimeout(5)
+
+        client.connect(
+            (ip, port)
+        )
+
+        client.settimeout(None)
+
+        status_label.config(
+            text="Đã kết nối Server"
+        )
+
+        terminal_output.insert(
+            tk.END,
+            "[SYSTEM] Đã kết nối Server\n"
+        )
+
+        terminal_output.see(
+            tk.END
+        )
+
+    except Exception as error:
+
+        if client is not None:
+            client.close()
+
         client = None
 
+        status_label.config(
+            text="Kết nối thất bại"
+        )
+
+        terminal_output.insert(
+            tk.END,
+            f"[ERROR] {error}\n"
+        )
 
 def disconnect_server():
+
     global client
 
-    if client != None:
+    if client is None:
+
+        status_label.config(
+            text="Chưa kết nối"
+        )
+
+        return
+
+    try:
+
+        request = build_request(
+            ACTION_DISCONNECT
+        )
+
+        client.sendall(
+            request.encode("utf-8")
+        )
+
+        receive_data()
+
+    except Exception:
+        pass
+
+    try:
         client.close()
-        client = None
+    except Exception:
+        pass
 
-    status_label.config(text="Đã ngắt kết nối")
-    terminal.insert(tk.END, "Đã ngắt kết nối.\n")
+    client = None
 
+    status_label.config(
+        text="Đã ngắt kết nối"
+    )
+
+    terminal_output.insert(
+        tk.END,
+        "[SYSTEM] Đã ngắt kết nối Server\n"
+    )
+
+    terminal_output.see(
+        tk.END
+    )
+
+def show_response(output_box, response):
+
+    status = response.get(
+        "status",
+        ""
+    )
+
+    output = response.get(
+        "output",
+        ""
+    )
+
+    message = response.get(
+        "message",
+        ""
+    )
+
+    output_box.insert(
+        tk.END,
+        f"[{status}] {message}\n"
+    )
+
+    if output:
+        output_box.insert(
+            tk.END,
+            output
+        )
+
+        if not output.endswith("\n"):
+            output_box.insert(
+                tk.END,
+                "\n"
+            )
 
 def send_command():
 
-    if client == None:
-        terminal.insert(tk.END, "Chưa kết nối Server.\n")
+    if client is None:
+
+        terminal_output.insert(
+            tk.END,
+            "[ERROR] Chưa kết nối Server\n"
+        )
+
         return
 
-    command = command_entry.get()
+    command = command_entry.get().strip()
 
     if command == "":
         return
 
     try:
-        terminal.insert(tk.END, "> " + command + "\n")
 
-        client.send(command.encode("utf-8"))
+        request = build_execute_request(
+            command
+        )
 
-        result = receive_data()
+        client.sendall(
+            request.encode("utf-8")
+        )
 
-        terminal.insert(tk.END, result + "\n")
-        terminal.see(tk.END)
+        data = receive_data()
 
-        command_entry.delete(0, tk.END)
+        if data == "":
 
-    except:
-        terminal.insert(tk.END, "Lỗi gửi lệnh.\n")
+            terminal_output.insert(
+                tk.END,
+                "[ERROR] Không nhận được dữ liệu từ Server\n"
+            )
 
+            return
+
+        response = parse_response(
+            data
+        )
+
+        terminal_output.insert(
+            tk.END,
+            f"> {command}\n"
+        )
+
+        show_response(
+            terminal_output,
+            response
+        )
+
+        terminal_output.insert(
+            tk.END,
+            "\n"
+        )
+
+        terminal_output.see(
+            tk.END
+        )
+
+        command_entry.delete(
+            0,
+            tk.END
+        )
+
+    except Exception as error:
+
+        terminal_output.insert(
+            tk.END,
+            f"[ERROR] {error}\n"
+        )
 
 def view_files():
 
-    if client == None:
-        file_text.insert(tk.END, "Chưa kết nối Server.\n")
+    if client is None:
+
+        file_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        file_output.insert(
+            tk.END,
+            "[ERROR] Chưa kết nối Server"
+        )
+
         return
 
-    path = path_entry.get()
+    path = path_entry.get().strip()
 
     if path == "":
         path = "."
 
     try:
-        command = 'dir "' + path + '"'
 
-        client.send(command.encode("utf-8"))
+        request = build_list_dir_request(
+            path
+        )
 
-        result = receive_data()
+        client.sendall(
+            request.encode("utf-8")
+        )
 
-        file_text.delete("1.0", tk.END)
-        file_text.insert(tk.END, result)
-        file_text.see(tk.END)
+        data = receive_data()
 
-    except:
-        file_text.insert(tk.END, "Lỗi xem file.\n")
+        if data == "":
+
+            file_output.delete(
+                "1.0",
+                tk.END
+            )
+
+            file_output.insert(
+                tk.END,
+                "[ERROR] Không nhận được dữ liệu từ Server"
+            )
+
+            return
+
+        response = parse_response(
+            data
+        )
+
+        file_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        show_response(
+            file_output,
+            response
+        )
+
+        file_output.see(
+            tk.END
+        )
+
+    except Exception as error:
+
+        file_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        file_output.insert(
+            tk.END,
+            f"[ERROR] {error}"
+        )
 
 def refresh_tasks():
 
-    if client == None:
-        task_text.insert(tk.END, "Chưa kết nối Server.\n")
+    if client is None:
+
+        task_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        task_output.insert(
+            tk.END,
+            "[ERROR] Chưa kết nối Server"
+        )
+
         return
 
     try:
-        client.send("tasklist".encode("utf-8"))
 
-        result = receive_data()
+        request = build_execute_request(
+            "tasklist"
+        )
 
-        task_text.delete("1.0", tk.END)
-        task_text.insert(tk.END, result)
-        task_text.see(tk.END)
+        client.sendall(
+            request.encode("utf-8")
+        )
 
-    except:
-        task_text.insert(tk.END, "Lỗi lấy danh sách Task.\n")
+        data = receive_data()
 
+        if data == "":
+
+            task_output.delete(
+                "1.0",
+                tk.END
+            )
+
+            task_output.insert(
+                tk.END,
+                "[ERROR] Không nhận được dữ liệu từ Server"
+            )
+
+            return
+
+        response = parse_response(
+            data
+        )
+
+        task_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        show_response(
+            task_output,
+            response
+        )
+
+        task_output.see(
+            tk.END
+        )
+
+    except Exception as error:
+
+        task_output.delete(
+            "1.0",
+            tk.END
+        )
+
+        task_output.insert(
+            tk.END,
+            f"[ERROR] {error}"
+        )
 
 def end_task():
 
-    if client == None:
-        task_text.insert(tk.END, "Chưa kết nối Server.\n")
+    if client is None:
+
+        task_output.insert(
+            tk.END,
+            "\n[ERROR] Chưa kết nối Server\n"
+        )
+
         return
 
-    pid = pid_entry.get()
+    pid = pid_entry.get().strip()
+
     if pid == "":
-        task_text.insert(tk.END, "Vui lòng nhập PID.\n")
+
+        task_output.insert(
+            tk.END,
+            "\n[ERROR] Vui lòng nhập PID\n"
+        )
+
         return
+
+    if not pid.isdigit():
+
+        task_output.insert(
+            tk.END,
+            "\n[ERROR] PID phải là số\n"
+        )
+
+        return
+
+    command = f"taskkill /PID {pid} /F"
 
     try:
-        command = "taskkill /PID " + pid + " /F"
 
-        client.send(command.encode("utf-8"))
+        request = build_execute_request(
+            command
+        )
 
-        result = receive_data()
+        client.sendall(
+            request.encode("utf-8")
+        )
 
-        task_text.insert(tk.END, "\n" + result + "\n")
-        task_text.see(tk.END)
+        data = receive_data()
 
-        pid_entry.delete(0, tk.END)
+        if data == "":
 
-    except:
-        task_text.insert(tk.END, "Lỗi End Task.\n")
+            task_output.insert(
+                tk.END,
+                "\n[ERROR] Không nhận được dữ liệu từ Server\n"
+            )
+
+            return
+
+        response = parse_response(
+            data
+        )
+
+        task_output.insert(
+            tk.END,
+            f"\n> {command}\n"
+        )
+
+        show_response(
+            task_output,
+            response
+        )
+
+        task_output.insert(
+            tk.END,
+            "\n"
+        )
+
+        task_output.see(
+            tk.END
+        )
+
+    except Exception as error:
+
+        task_output.insert(
+            tk.END,
+            f"\n[ERROR] {error}\n"
+        )
 
 
 window = tk.Tk()
 
-window.title("TCP Client")
-window.geometry("700x700")
+window.title(
+    "TCP Client"
+)
+
+window.geometry(
+    "900x650"
+)
+
+window.minsize(
+    700,
+    500
+)
+
+connection_frame = tk.Frame(
+    window
+)
+
+connection_frame.pack(
+    fill="x",
+    padx=10,
+    pady=10
+)
 
 
 tk.Label(
-    window,
-    text="TCP CLIENT",
-    font=("Arial", 18)
-).pack(pady=15)
+    connection_frame,
+    text="Server IP:"
+).pack(
+    side="left"
+)
 
 
-tk.Label(
-    window,
-    text="Server IP"
-).pack()
-
-ip_entry = tk.Entry(window)
+ip_entry = tk.Entry(
+    connection_frame,
+    width=15
+)
 
 ip_entry.insert(
     0,
     "127.0.0.1"
 )
 
-ip_entry.pack()
+ip_entry.pack(
+    side="left",
+    padx=5
+)
 
 
 tk.Label(
-    window,
-    text="Port"
-).pack()
+    connection_frame,
+    text="Port:"
+).pack(
+    side="left"
+)
 
-port_entry = tk.Entry(window)
+
+port_entry = tk.Entry(
+    connection_frame,
+    width=8
+)
 
 port_entry.insert(
     0,
     "5000"
 )
 
-port_entry.pack()
+port_entry.pack(
+    side="left",
+    padx=5
+)
 
 
 tk.Button(
-    window,
+    connection_frame,
     text="CONNECT",
     command=connect_server
-).pack(pady=8)
+).pack(
+    side="left",
+    padx=5
+)
 
 
 tk.Button(
-    window,
+    connection_frame,
     text="DISCONNECT",
     command=disconnect_server
-).pack()
+).pack(
+    side="left"
+)
 
 
 status_label = tk.Label(
-    window,
+    connection_frame,
     text="Chưa kết nối"
 )
 
-status_label.pack(pady=10)
+status_label.pack(
+    side="left",
+    padx=10
+)
+notebook = ttk.Notebook(
+    window
+)
 
-
-tabs = ttk.Notebook(window)
-
-tabs.pack(
+notebook.pack(
     fill="both",
     expand=True,
     padx=10,
-    pady=10
+    pady=5
 )
 
+terminal_tab = tk.Frame(
+    notebook
+)
 
-terminal_tab = tk.Frame(tabs)
-
-tabs.add(
+notebook.add(
     terminal_tab,
     text="Terminal"
 )
 
 
-terminal = tk.Text(
+terminal_output = tk.Text(
     terminal_tab,
     bg="black",
-    fg="white"
+    fg="white",
+    insertbackground="white"
 )
 
-terminal.pack(
+terminal_output.pack(
     fill="both",
     expand=True,
-    padx=5,
-    pady=5
+    padx=10,
+    pady=10
 )
 
 
@@ -256,16 +639,8 @@ command_frame = tk.Frame(
 
 command_frame.pack(
     fill="x",
-    padx=5,
-    pady=5
-)
-
-
-tk.Label(
-    command_frame,
-    text="Command:"
-).pack(
-    side="left"
+    padx=10,
+    pady=10
 )
 
 
@@ -276,42 +651,58 @@ command_entry = tk.Entry(
 command_entry.pack(
     side="left",
     fill="x",
-    expand=True,
-    padx=5
+    expand=True
 )
 
 
 tk.Button(
     command_frame,
     text="SEND",
+    width=10,
     command=send_command
 ).pack(
-    side="right"
+    side="left",
+    padx=5
 )
 
 
-file_tab = tk.Frame(tabs)
+command_entry.bind(
+    "<Return>",
+    lambda event: send_command()
+)
 
-tabs.add(
+file_tab = tk.Frame(
+    notebook
+)
+
+notebook.add(
     file_tab,
     text="File Browser"
 )
 
-tk.Label(
-    file_tab,
-    text="Đường dẫn:"
-).pack(
-    pady=5
+
+file_frame = tk.Frame(
+    file_tab
 )
 
-path_frame = tk.Frame(file_tab)
-
-path_frame.pack(
+file_frame.pack(
     fill="x",
-    padx=10
+    padx=10,
+    pady=10
 )
 
-path_entry = tk.Entry(path_frame)
+
+tk.Label(
+    file_frame,
+    text="Path:"
+).pack(
+    side="left"
+)
+
+
+path_entry = tk.Entry(
+    file_frame
+)
 
 path_entry.insert(
     0,
@@ -321,81 +712,113 @@ path_entry.insert(
 path_entry.pack(
     side="left",
     fill="x",
-    expand=True
-)
-
-tk.Button(
-    path_frame,
-    text="XEM FILE",
-    command=view_files
-).pack(
-    side="right",
+    expand=True,
     padx=5
 )
 
-file_text = tk.Text(file_tab)
 
-file_text.pack(
+tk.Button(
+    file_frame,
+    text="XEM FILE",
+    command=view_files
+).pack(
+    side="left",
+    padx=5
+)
+
+
+file_output = tk.Text(
+    file_tab
+)
+
+file_output.pack(
     fill="both",
     expand=True,
     padx=10,
     pady=10
 )
 
+task_tab = tk.Frame(
+    notebook
+)
 
-task_tab = tk.Frame(tabs)
-
-tabs.add(
+notebook.add(
     task_tab,
     text="Task Manager"
 )
 
-tk.Button(
-    task_tab,
-    text="REFRESH",
-    command=refresh_tasks
-).pack(
-    pady=8
+
+task_frame = tk.Frame(
+    task_tab
 )
 
-pid_frame = tk.Frame(task_tab)
-
-pid_frame.pack(
+task_frame.pack(
     fill="x",
     padx=10,
-    pady=5
+    pady=10
 )
 
-tk.Label(
-    pid_frame,
-    text="PID:"
+
+tk.Button(
+    task_frame,
+    text="REFRESH",
+    command=refresh_tasks
 ).pack(
     side="left"
 )
 
-pid_entry = tk.Entry(pid_frame)
 
-pid_entry.pack(
+tk.Label(
+    task_frame,
+    text="PID:"
+).pack(
     side="left",
-    fill="x",
-    expand=True,
-    padx=5
+    padx=(20, 5)
 )
 
+
+pid_entry = tk.Entry(
+    task_frame,
+    width=15
+)
+
+pid_entry.pack(
+    side="left"
+)
+
+
 tk.Button(
-    pid_frame,
+    task_frame,
     text="END TASK",
     command=end_task
 ).pack(
-    side="right"
+    side="left",
+    padx=5
 )
 
-task_text = tk.Text(task_tab)
 
-task_text.pack(
+task_output = tk.Text(
+    task_tab
+)
+
+task_output.pack(
     fill="both",
     expand=True,
     padx=10,
-    pady=5
+    pady=10
 )
+
+def close_window():
+
+    if client is not None:
+        disconnect_server()
+
+    window.destroy()
+
+
+window.protocol(
+    "WM_DELETE_WINDOW",
+    close_window
+)
+
 window.mainloop()
