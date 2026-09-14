@@ -55,12 +55,16 @@ def handle_client(client_socket, client_address):
             message = data.decode("utf-8")
             logger.debug(f"[RECV] {message}")
 
+ # Phan tich request JSON
+
             request = parse_request(message)
 
             action = request.get("action", "")
             payload = request.get("payload", {})
 
             logger.info(f"[ACTION] {action}")
+
+# Thực thi lệnh
 
             if action == ACTION_EXECUTE:
 
@@ -102,6 +106,8 @@ def handle_client(client_socket, client_address):
 
                 logger.debug(f"[SEND] {response}")
 
+# Lấy danh sách thư mục
+
             elif action == ACTION_LIST_DIR:
 
                 path = payload.get("path", ".")
@@ -142,6 +148,8 @@ def handle_client(client_socket, client_address):
 
                 logger.debug(f"[SEND] {response}")
 
+# Ngắt kết nối
+
             elif action == ACTION_DISCONNECT:
 
                 response = build_response(
@@ -162,6 +170,8 @@ def handle_client(client_socket, client_address):
                 logger.debug(f"[SEND] {response}")
 
                 break
+
+# Action không hợp lệ
 
             else:
 
@@ -204,6 +214,7 @@ def handle_client(client_socket, client_address):
             f"{client_ip}:{client_port}"
         )
 
+# Tạo Socket Server
 
 server_socket = socket.socket(
     socket.AF_INET,
@@ -216,12 +227,11 @@ server_socket.bind(
 
 server_socket.listen(5)
 
-logger.info("=" * 45)
-logger.info("              TCP SERVER")
-logger.info("=" * 45)
+logger.info("TCP Server đang khởi động")
 logger.info(f"[SERVER] Dang chay tai cong {PORT}")
 logger.info("[SERVER] Dang cho Client ket noi...")
 
+# Chờ và nhận nhiều Client kết nối
 
 while True:
 
@@ -230,7 +240,7 @@ while True:
     client_ip = client_address[0]
     client_port = client_address[1]
 
-    logger.info("=" * 45)
+# Yêu cầu Server cho phép Client kết nối
 
     logger.info(
         f"[REQUEST] Client {client_ip}:"
@@ -241,6 +251,8 @@ while True:
         client_ip,
         client_port
     )
+
+# Tu choi Client
 
     if permission == False:
 
@@ -267,6 +279,8 @@ while True:
 
         continue
 
+# Chap nhan Client
+
     logger.info(
         f"[PERMISSION] Client {client_ip}:"
         f"{client_port} da duoc cho phep."
@@ -286,6 +300,8 @@ while True:
         f"[PERMISSION] Da gui xac nhan ket noi cho "
         f"Client {client_ip}:{client_port}."
     )
+
+# Tạo Thread riêng để xử lý Client
 
     client_thread = threading.Thread(
         target=handle_client,
