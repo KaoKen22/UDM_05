@@ -23,7 +23,7 @@ from protocol import (
 
 from command_execution import execute_command
 from logger import logger
-
+from server_gui import ask_permission
 
 HOST = "0.0.0.0"
 PORT = 5000
@@ -37,31 +37,26 @@ def handle_client(client_socket, client_address):
     logger.info(
         f"[CONNECT] Client: {client_ip}:{client_port}"
     )
-
     logger.info(
         f"[THREAD] Dang xu ly Client {client_ip}:{client_port}"
     )
 
     try:
-
         while True:
-
             data = client_socket.recv(4096)
 
             if not data:
-
                 logger.info(
                     f"[DISCONNECT] Client {client_ip}:{client_port} "
                     "da ngat ket noi."
                 )
-
                 break
 
             message = data.decode("utf-8")
-
             logger.debug(f"[RECV] {message}")
 
-            # Phan tich request JSON
+ # Phan tich request JSON
+
             request = parse_request(message)
 
             action = request.get("action", "")
@@ -69,7 +64,7 @@ def handle_client(client_socket, client_address):
 
             logger.info(f"[ACTION] {action}")
 
-            # EXECUTE
+# Thực thi lệnh
 
             if action == ACTION_EXECUTE:
 
@@ -111,7 +106,7 @@ def handle_client(client_socket, client_address):
 
                 logger.debug(f"[SEND] {response}")
 
-            # LIST_DIR
+# Lấy danh sách thư mục
 
             elif action == ACTION_LIST_DIR:
 
@@ -153,7 +148,7 @@ def handle_client(client_socket, client_address):
 
                 logger.debug(f"[SEND] {response}")
 
-            # DISCONNECT
+# Ngắt kết nối
 
             elif action == ACTION_DISCONNECT:
 
@@ -176,7 +171,7 @@ def handle_client(client_socket, client_address):
 
                 break
 
-            # ACTION KHONG HOP LE
+# Action không hợp lệ
 
             else:
 
@@ -219,8 +214,7 @@ def handle_client(client_socket, client_address):
             f"{client_ip}:{client_port}"
         )
 
-
-# Tao Socket Server
+# Tạo Socket Server
 
 server_socket = socket.socket(
     socket.AF_INET,
@@ -233,36 +227,34 @@ server_socket.bind(
 
 server_socket.listen(5)
 
-
-logger.info("=" * 45)
-logger.info("              TCP SERVER")
-logger.info("=" * 45)
+logger.info("TCP Server đang khởi động")
 logger.info(f"[SERVER] Dang chay tai cong {PORT}")
 logger.info("[SERVER] Dang cho Client ket noi...")
 
-
-# Cho nhieu Client ket noi
+# Chờ và nhận nhiều Client kết nối
 
 while True:
 
     client_socket, client_address = server_socket.accept()
 
-    # Yeu cau nguoi dung tai Server cho phep Client
+    client_ip = client_address[0]
+    client_port = client_address[1]
 
-    logger.info("=" * 45)
+# Yêu cầu Server cho phép Client kết nối
 
     logger.info(
-        f"[REQUEST] Client {client_address[0]}:"
-        f"{client_address[1]} yeu cau ket noi."
+        f"[REQUEST] Client {client_ip}:"
+        f"{client_port} yeu cau ket noi."
     )
 
-    permission = input(
-        "[PERMISSION] Cho phep Client? (y/n): "
+    permission = ask_permission(
+        client_ip,
+        client_port
     )
 
-    # Tu choi Client
+# Tu choi Client
 
-    if permission.lower() != "y":
+    if permission == False:
 
         response = build_response(
             STATUS_ERROR,
@@ -275,8 +267,8 @@ while True:
         )
 
         logger.warning(
-            f"[PERMISSION] Client {client_address[0]}:"
-            f"{client_address[1]} bi tu choi."
+            f"[PERMISSION] Client {client_ip}:"
+            f"{client_port} bi tu choi."
         )
 
         client_socket.close()
@@ -287,12 +279,29 @@ while True:
 
         continue
 
-    # Chap nhan Client
+# Chap nhan Client
 
     logger.info(
-        f"[PERMISSION] Client {client_address[0]}:"
-        f"{client_address[1]} da duoc cho phep."
+        f"[PERMISSION] Client {client_ip}:"
+        f"{client_port} da duoc cho phep."
     )
+
+    response = build_response(
+        STATUS_SUCCESS,
+        "",
+        "Ket noi duoc Server cho phep"
+    )
+
+    client_socket.sendall(
+        response.encode("utf-8")
+    )
+
+    logger.info(
+        f"[PERMISSION] Da gui xac nhan ket noi cho "
+        f"Client {client_ip}:{client_port}."
+    )
+
+# Tạo Thread riêng để xử lý Client
 
     client_thread = threading.Thread(
         target=handle_client,
@@ -304,7 +313,7 @@ while True:
 
     logger.info(
         f"[SERVER] Da tao Thread cho Client "
-        f"{client_address[0]}:{client_address[1]}"
+        f"{client_ip}:{client_port}"
     )
 
     logger.info(
