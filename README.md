@@ -14,3 +14,9 @@
 ## Giới thiệu
 
 Ứng dụng cho phép người dùng kết nối đến một máy Client từ xa sau khi được người dùng tại máy đích cho phép. Khi đã kết nối thành công, người dùng có thể thực thi các lệnh cơ bản nằm trong danh sách cho phép, xem kết quả thực thi, thông báo lỗi và mã kết thúc ngay trên giao diện ứng dụng.
+
+## Tài liệu chi tiết
+
+Chi tiết về kiến trúc hệ thống, giao thức, cấu trúc message, công nghệ, chức năng, hướng dẫn chạy, cấu hình, kiểm thử và các nội dung liên quan được trình bày trong file:
+
+phancong_UDM_05_dieukhientuxa.xlsx
