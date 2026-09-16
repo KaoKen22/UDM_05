@@ -17,6 +17,21 @@
 
 ## Tài liệu chi tiết
 
-Chi tiết về kiến trúc hệ thống, giao thức, cấu trúc message, công nghệ, chức năng, hướng dẫn chạy, cấu hình, kiểm thử và các nội dung liên quan được trình bày trong file:
+Chi tiết về kiến trúc hệ thống,yêu cầu môi trường, cài đặt, hướng dẫn chạy, cấu hình, chức năng và các nội dung liên quan được trình bày trong file:
 
 phancong_UDM_05_dieukhientuxa.xlsx
+## Kiểm thử
+
+- Functional test:
+- Test dữ liệu không hợp lệ:
+- Test mất kết nối:
+- Stress test:
+- Performance test:
+
+Bằng chứng kiểm thử lưu tại `Extra/`.
+
+## Demo
+
+- Video: [Public hoặc Unlisted URL]
+- Slide: `PPTX/`
+- Báo cáo: `DOCX/`
