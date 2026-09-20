@@ -24,7 +24,7 @@ phancong_UDM_05_dieukhientuxa.xlsx
 
 - **Functional Test:** Kiểm tra kết nối TCP, thực thi lệnh từ xa, xem danh sách thư mục và ngắt kết nối.
 - **Test dữ liệu không hợp lệ:** Kiểm tra lệnh không được phép và dữ liệu/request không hợp lệ.
-- **Test kết nối:** Kiểm tra xác nhận kết nối, từ chối kết nối, thời gian chờ xác nhận và ngắt kết nối.
+- **Test kết nối:** Kiểm tra xác nhận kết nối, từ chối kết nối và ngắt kết nối.
 - **Stress Test:** Kiểm tra Server khi nhiều Client kết nối và gửi yêu cầu đồng thời.
 - **Performance Test:** Kiểm tra thời gian phản hồi và khả năng xử lý yêu cầu.
 - **Bằng chứng kiểm thử:** Lưu tại thư mục `Extra/`.
