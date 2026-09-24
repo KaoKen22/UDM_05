@@ -32,5 +32,4 @@ phancong_UDM_05_dieukhientuxa.xlsx
 ## Demo
 
 - Video: [Public hoặc Unlisted URL]
-- Slide: `PPTX/`
 - Báo cáo: `DOCX/`
