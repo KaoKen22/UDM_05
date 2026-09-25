@@ -3,6 +3,8 @@ from tkinter import ttk
 import socket
 import sys
 import os
+import threading
+import json
 
 sys.path.append(
     os.path.abspath(
@@ -23,214 +25,387 @@ from protocol import (
 )
 
 client = None
+network_lock = threading.Lock()
 
-def receive_data():
+DEFAULT_RESPONSE_TIMEOUT = 10.0
+PERMISSION_TIMEOUT = 30.0
+
+
+def ui_call(func, *args, **kwargs):
+    window.after(0, lambda: func(*args, **kwargs))
+
+
+def append_text(text_box, message):
+    text_box.insert(tk.END, message)
+    text_box.see(tk.END)
+
+
+def set_status(message):
+    status_label.config(text=message)
+
+
+def close_client_socket():
+    global client
+
+    sock = client
+    client = None
+
+    if sock is not None:
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def receive_data(timeout=DEFAULT_RESPONSE_TIMEOUT):
+    global client
+
+    if client is None:
+        return ""
 
     data = b""
 
-    client.settimeout(0.5)
-
     try:
+        client.settimeout(timeout)
+
         while True:
             part = client.recv(4096)
 
             if not part:
-                break
+                return ""
 
             data += part
 
+            try:
+                json.loads(data.decode("utf-8"))
+                break
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+        return data.decode("utf-8", errors="ignore")
+
     except socket.timeout:
-        pass
+        return None
 
-    except Exception:
-        pass
+    except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+        return ""
 
-    client.settimeout(None)
+    except OSError:
+        return ""
 
-    return data.decode(
-        "utf-8",
-        errors="ignore"
-    )
+    finally:
+        if client is not None:
+            try:
+                client.settimeout(None)
+            except Exception:
+                pass
+
 
 def connect_server():
-    global client
-
     ip = ip_entry.get().strip()
 
     try:
         port = int(port_entry.get())
     except ValueError:
-        status_label.config(text="Port không hợp lệ")
+        set_status("Port không hợp lệ")
+        append_text(terminal, "[ERROR] Port phải là số.\n")
         return
 
-    try:
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.connect((ip, port))
+    if not ip:
+        set_status("IP không hợp lệ")
+        append_text(terminal, "[ERROR] Vui lòng nhập Server IP.\n")
+        return
 
-        status_label.config(text="Đang chờ Server cho phép...")
-        terminal.insert(
-            tk.END,
-            "Đã gửi yêu cầu kết nối. Đang chờ Server cho phép...\n"
-        )
-        terminal.see(tk.END)
+    threading.Thread(
+        target=_connect_worker,
+        args=(ip, port),
+        daemon=True
+    ).start()
 
-        # Chờ Server trả lời:
-        # SUCCESS = chấp nhận
-        # ERROR = từ chối
-        client.settimeout(30)
 
-        try:
-            data = client.recv(4096)
-
-            if not data:
-                raise ConnectionError("Server đã đóng kết nối.")
-
-            response = parse_response(
-                data.decode("utf-8", errors="ignore")
-            )
-
-            status = response.get("status", "ERROR")
-            message = response.get("message", "")
-
-            if status == "SUCCESS":
-                status_label.config(text="Đã được Server chấp nhận")
-                terminal.insert(
-                    tk.END,
-                    "[SUCCESS] Server đã chấp nhận kết nối.\n"
-                )
-            else:
-                status_label.config(text="Server từ chối kết nối")
-                terminal.insert(
-                    tk.END,
-                    "[ERROR] Server từ chối kết nối.\n"
-                )
-
-                if message:
-                    terminal.insert(tk.END, message + "\n")
-
-                client.close()
-                client = None
-
-            if message and status == "SUCCESS":
-                terminal.insert(tk.END, message + "\n")
-
-            terminal.see(tk.END)
-
-        except socket.timeout:
-            status_label.config(text="Đang chờ Server cho phép...")
-            terminal.insert(
-                tk.END,
-                "[WAIT] Server chưa gửi phản hồi cho phép/từ chối.\n"
-            )
-            terminal.see(tk.END)
-
-        finally:
-            if client is not None:
-                client.settimeout(None)
-
-    except Exception as error:
-        if client is not None:
-            client.close()
-
-        client = None
-        status_label.config(text="Kết nối thất bại")
-        terminal.insert(
-            tk.END,
-            "Kết nối thất bại: " + str(error) + "\n"
-        )
-        terminal.see(tk.END)
-
-def disconnect_server():
-
+def _connect_worker(ip, port):
     global client
 
-    if client is None:
-        status_label.config(
-            text="Chưa kết nối"
+    if client is not None:
+        ui_call(
+            append_text,
+            terminal,
+            "[INFO] Client đang có kết nối. Hãy ngắt kết nối trước.\n"
         )
         return
 
-    try:
-
-        request = build_request(
-            ACTION_DISCONNECT
-        )
-
-        client.sendall(
-            request.encode("utf-8")
-        )
-
-        receive_data()
-
-    except Exception:
-        pass
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
-        client.close()
-    except Exception:
-        pass
+        sock.settimeout(10.0)
 
-    client = None
+        ui_call(set_status, "Đang kết nối Server...")
+        ui_call(
+            append_text,
+            terminal,
+            f"[CONNECT] Đang kết nối {ip}:{port}...\n"
+        )
 
-    status_label.config(
-        text="Đã ngắt kết nối"
-    )
+        sock.connect((ip, port))
+        client = sock
 
-    terminal.insert(
-        tk.END,
-        "Đã ngắt kết nối.\n"
-    )
+        ui_call(set_status, "Đang chờ Server cho phép...")
+        ui_call(
+            append_text,
+            terminal,
+            "Đã gửi yêu cầu kết nối. Đang chờ Server cho phép...\n"
+        )
 
-    terminal.see(tk.END)
+        response_text = receive_data(timeout=PERMISSION_TIMEOUT)
+
+        if response_text is None:
+            ui_call(
+                append_text,
+                terminal,
+                "[TIMEOUT] Server không phản hồi yêu cầu kết nối "
+                f"trong {int(PERMISSION_TIMEOUT)} giây.\n"
+            )
+            ui_call(set_status, "Timeout khi chờ Server")
+            close_client_socket()
+            return
+
+        if response_text == "":
+            ui_call(
+                append_text,
+                terminal,
+                "[DISCONNECT] Server đã đóng kết nối khi đang chờ cho phép.\n"
+            )
+            ui_call(set_status, "Server đã đóng kết nối")
+            close_client_socket()
+            return
+
+        response = parse_response(response_text)
+
+        status = response.get("status", "ERROR")
+        message = response.get("message", "")
+
+        if status == "SUCCESS":
+            ui_call(set_status, "Đã được Server chấp nhận")
+            ui_call(
+                append_text,
+                terminal,
+                "[SUCCESS] Server đã chấp nhận kết nối.\n"
+            )
+
+            if message:
+                ui_call(append_text, terminal, message + "\n")
+
+        else:
+            ui_call(set_status, "Server từ chối kết nối")
+            ui_call(
+                append_text,
+                terminal,
+                "[ERROR] Server từ chối kết nối.\n"
+            )
+
+            if message:
+                ui_call(append_text, terminal, message + "\n")
+
+            close_client_socket()
+
+    except socket.timeout:
+        ui_call(set_status, "Kết nối timeout")
+        ui_call(
+            append_text,
+            terminal,
+            "[TIMEOUT] Không thể kết nối tới Server trong thời gian cho phép.\n"
+        )
+        close_client_socket()
+
+    except ConnectionRefusedError:
+        ui_call(set_status, "Kết nối thất bại")
+        ui_call(
+            append_text,
+            terminal,
+            "[ERROR] Server từ chối kết nối hoặc chưa được khởi động.\n"
+        )
+        close_client_socket()
+
+    except socket.gaierror:
+        ui_call(set_status, "IP/Hostname không hợp lệ")
+        ui_call(
+            append_text,
+            terminal,
+            "[ERROR] Không tìm thấy địa chỉ Server.\n"
+        )
+        close_client_socket()
+
+    except Exception as error:
+        ui_call(set_status, "Kết nối thất bại")
+        ui_call(
+            append_text,
+            terminal,
+            "[ERROR] Kết nối thất bại: " + str(error) + "\n"
+        )
+        close_client_socket()
+
+
+def disconnect_server():
+    if client is None:
+        set_status("Chưa kết nối")
+        append_text(terminal, "[INFO] Chưa kết nối Server.\n")
+        return
+
+    threading.Thread(
+        target=_disconnect_worker,
+        daemon=True
+    ).start()
+
+
+def _disconnect_worker():
+    with network_lock:
+        if client is None:
+            return
+
+        try:
+            request = build_request(ACTION_DISCONNECT)
+            client.sendall(request.encode("utf-8"))
+            receive_data(timeout=3.0)
+        except Exception:
+            pass
+        finally:
+            close_client_socket()
+
+            ui_call(set_status, "Đã ngắt kết nối")
+            ui_call(
+                append_text,
+                terminal,
+                "Đã ngắt kết nối.\n"
+            )
 
 
 def show_response(text_box, data):
-
     response = parse_response(data)
 
-    status = response.get(
-        "status",
-        "ERROR"
-    )
-
-    output = response.get(
-        "output",
-        ""
-    )
-
-    message = response.get(
-        "message",
-        ""
-    )
+    status = response.get("status", "ERROR")
+    output = response.get("output", "")
+    message = response.get("message", "")
+    error = response.get("error", "")
+    exit_code = response.get("exit_code", None)
 
     text_box.insert(
         tk.END,
-        "[" + status + "] "
-        + message
-        + "\n"
+        "[" + str(status) + "] " + str(message) + "\n"
     )
 
     if output:
+        text_box.insert(tk.END, str(output))
+
+        if not str(output).endswith("\n"):
+            text_box.insert(tk.END, "\n")
+
+    if error:
         text_box.insert(
             tk.END,
-            output
+            "[ERROR] " + str(error) + "\n"
         )
 
-        if not output.endswith("\n"):
-            text_box.insert(
-                tk.END,
-                "\n"
+    if exit_code is not None:
+        text_box.insert(
+            tk.END,
+            "[EXIT CODE] " + str(exit_code) + "\n"
+        )
+
+    text_box.see(tk.END)
+
+
+def _send_request_worker(request, text_box, clear_box=False, prefix=""):
+    global client
+
+    with network_lock:
+        if client is None:
+            ui_call(
+                append_text,
+                text_box,
+                "Chưa kết nối Server.\n"
+            )
+            return
+
+        if clear_box:
+            ui_call(text_box.delete, "1.0", tk.END)
+
+        if prefix:
+            ui_call(append_text, text_box, prefix)
+
+        try:
+            client.sendall(request.encode("utf-8"))
+
+            result = receive_data(
+                timeout=DEFAULT_RESPONSE_TIMEOUT
             )
 
+            if result is None:
+                ui_call(
+                    append_text,
+                    text_box,
+                    "[TIMEOUT] Không nhận được phản hồi từ Server "
+                    f"trong {int(DEFAULT_RESPONSE_TIMEOUT)} giây.\n"
+                )
+                return
+
+            if result == "":
+                ui_call(
+                    append_text,
+                    text_box,
+                    "[DISCONNECT] Mất kết nối với Server.\n"
+                )
+                ui_call(
+                    set_status,
+                    "Mất kết nối Server"
+                )
+
+                close_client_socket()
+                return
+
+            ui_call(
+                show_response,
+                text_box,
+                result
+            )
+
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            ui_call(
+                append_text,
+                text_box,
+                "[DISCONNECT] Mất kết nối đột ngột với Server.\n"
+            )
+            ui_call(
+                set_status,
+                "Mất kết nối Server"
+            )
+            close_client_socket()
+
+        except socket.timeout:
+            ui_call(
+                append_text,
+                text_box,
+                "[TIMEOUT] Thao tác mạng vượt quá thời gian cho phép.\n"
+            )
+
+        except Exception as error:
+            ui_call(
+                append_text,
+                text_box,
+                "[ERROR] " + str(error) + "\n"
+            )
+
+
 def send_command():
-
     if client is None:
-
-        terminal.insert(
-            tk.END,
+        append_text(
+            terminal,
             "Chưa kết nối Server.\n"
         )
-
         return
 
     command = command_entry.get().strip()
@@ -238,68 +413,28 @@ def send_command():
     if command == "":
         return
 
-    try:
+    append_text(
+        terminal,
+        "> " + command + "\n"
+    )
 
-        terminal.insert(
-            tk.END,
-            "> " + command + "\n"
-        )
+    command_entry.delete(0, tk.END)
 
-      
-        request = build_execute_request(
-            command
-        )
+    request = build_execute_request(command)
 
-  
-        client.sendall(
-            request.encode("utf-8")
-        )
+    threading.Thread(
+        target=_send_request_worker,
+        args=(request, terminal),
+        daemon=True
+    ).start()
 
- 
-        result = receive_data()
-
-        if result == "":
-            terminal.insert(
-                tk.END,
-                "[ERROR] Không nhận được phản hồi.\n"
-            )
-            return
-
-        show_response(
-            terminal,
-            result
-        )
-
-        terminal.insert(
-            tk.END,
-            "\n"
-        )
-
-        terminal.see(tk.END)
-
-        command_entry.delete(
-            0,
-            tk.END
-        )
-
-    except Exception as error:
-
-        terminal.insert(
-            tk.END,
-            "[ERROR] "
-            + str(error)
-            + "\n"
-        )
 
 def view_files():
-
     if client is None:
-
-        file_text.insert(
-            tk.END,
+        append_text(
+            file_text,
             "Chưa kết nối Server.\n"
         )
-
         return
 
     path = path_entry.get().strip()
@@ -307,261 +442,106 @@ def view_files():
     if path == "":
         path = "."
 
-    try:
+    request = build_list_dir_request(path)
 
-    
-        request = build_list_dir_request(
-            path
-        )
-
-        client.sendall(
-            request.encode("utf-8")
-        )
-
-        result = receive_data()
-
-        file_text.delete(
-            "1.0",
-            tk.END
-        )
-
-        if result == "":
-            file_text.insert(
-                tk.END,
-                "[ERROR] Không nhận được phản hồi.\n"
-            )
-            return
-
-        show_response(
-            file_text,
-            result
-        )
-
-        file_text.see(
-            tk.END
-        )
-
-    except Exception as error:
-
-        file_text.delete(
-            "1.0",
-            tk.END
-        )
-
-        file_text.insert(
-            tk.END,
-            "[ERROR] "
-            + str(error)
-        )
+    threading.Thread(
+        target=_send_request_worker,
+        args=(request, file_text, True),
+        daemon=True
+    ).start()
 
 
 def refresh_tasks():
-
     if client is None:
-
-        task_text.insert(
-            tk.END,
+        append_text(
+            task_text,
             "Chưa kết nối Server.\n"
         )
-
         return
 
-    try:
+    request = build_execute_request("tasklist")
 
-     
-        request = build_execute_request(
-            "tasklist"
-        )
-
-        client.sendall(
-            request.encode("utf-8")
-        )
-
-        result = receive_data()
-
-        task_text.delete(
-            "1.0",
-            tk.END
-        )
-
-        if result == "":
-            task_text.insert(
-                tk.END,
-                "[ERROR] Không nhận được phản hồi.\n"
-            )
-            return
-
-        show_response(
-            task_text,
-            result
-        )
-
-        task_text.see(
-            tk.END
-        )
-
-    except Exception as error:
-
-        task_text.delete(
-            "1.0",
-            tk.END
-        )
-
-        task_text.insert(
-            tk.END,
-            "[ERROR] "
-            + str(error)
-        )
+    threading.Thread(
+        target=_send_request_worker,
+        args=(request, task_text, True),
+        daemon=True
+    ).start()
 
 
 def end_task():
-
     if client is None:
-
-        task_text.insert(
-            tk.END,
+        append_text(
+            task_text,
             "Chưa kết nối Server.\n"
         )
-
         return
 
     pid = pid_entry.get().strip()
 
     if pid == "":
-
-        task_text.insert(
-            tk.END,
+        append_text(
+            task_text,
             "Vui lòng nhập PID.\n"
         )
-
         return
 
     if not pid.isdigit():
-
-        task_text.insert(
-            tk.END,
+        append_text(
+            task_text,
             "PID phải là số.\n"
         )
-
         return
 
-    try:
+    command = "taskkill /PID " + pid + " /F"
+    request = build_execute_request(command)
 
-        command = (
-            "taskkill /PID "
-            + pid
-            + " /F"
-        )
+    pid_entry.delete(0, tk.END)
 
-      
-        request = build_execute_request(
-            command
-        )
-
-        client.sendall(
-            request.encode("utf-8")
-        )
-
-        result = receive_data()
-
-        task_text.insert(
-            tk.END,
-            "\n> " + command + "\n"
-        )
-
-        if result == "":
-            task_text.insert(
-                tk.END,
-                "[ERROR] Không nhận được phản hồi.\n"
-            )
-            return
-
-        show_response(
+    threading.Thread(
+        target=_send_request_worker,
+        args=(
+            request,
             task_text,
-            result
-        )
-
-        task_text.see(
-            tk.END
-        )
-
-        pid_entry.delete(
-            0,
-            tk.END
-        )
-
-    except Exception as error:
-
-        task_text.insert(
-            tk.END,
-            "[ERROR] "
-            + str(error)
-            + "\n"
-        )
+            False,
+            "\n> " + command + "\n"
+        ),
+        daemon=True
+    ).start()
 
 
 window = tk.Tk()
-
-window.title(
-    "TCP Client"
-)
-
-window.geometry(
-    "700x700"
-)
-
+window.title("TCP Client")
+window.geometry("700x700")
 
 tk.Label(
     window,
     text="TCP CLIENT",
     font=("Arial", 18)
-).pack(
-    pady=15
-)
-
+).pack(pady=15)
 
 tk.Label(
     window,
     text="Server IP"
 ).pack()
 
-ip_entry = tk.Entry(
-    window
-)
-
-ip_entry.insert(
-    0,
-    "127.0.0.1"
-)
-
+ip_entry = tk.Entry(window)
+ip_entry.insert(0, "127.0.0.1")
 ip_entry.pack()
-
 
 tk.Label(
     window,
     text="Port"
 ).pack()
 
-port_entry = tk.Entry(
-    window
-)
-
-port_entry.insert(
-    0,
-    "5000"
-)
-
+port_entry = tk.Entry(window)
+port_entry.insert(0, "5000")
 port_entry.pack()
-
 
 tk.Button(
     window,
     text="CONNECT",
     command=connect_server
-).pack(
-    pady=8
-)
-
+).pack(pady=8)
 
 tk.Button(
     window,
@@ -569,21 +549,13 @@ tk.Button(
     command=disconnect_server
 ).pack()
 
-
 status_label = tk.Label(
     window,
     text="Chưa kết nối"
 )
+status_label.pack(pady=10)
 
-status_label.pack(
-    pady=10
-)
-
-
-tabs = ttk.Notebook(
-    window
-)
-
+tabs = ttk.Notebook(window)
 tabs.pack(
     fill="both",
     expand=True,
@@ -591,23 +563,14 @@ tabs.pack(
     pady=10
 )
 
-
-terminal_tab = tk.Frame(
-    tabs
-)
-
-tabs.add(
-    terminal_tab,
-    text="Terminal"
-)
-
+terminal_tab = tk.Frame(tabs)
+tabs.add(terminal_tab, text="Terminal")
 
 terminal = tk.Text(
     terminal_tab,
     bg="black",
     fg="white"
 )
-
 terminal.pack(
     fill="both",
     expand=True,
@@ -615,30 +578,19 @@ terminal.pack(
     pady=5
 )
 
-
-command_frame = tk.Frame(
-    terminal_tab
-)
-
+command_frame = tk.Frame(terminal_tab)
 command_frame.pack(
     fill="x",
     padx=5,
     pady=5
 )
 
-
 tk.Label(
     command_frame,
     text="Command:"
-).pack(
-    side="left"
-)
+).pack(side="left")
 
-
-command_entry = tk.Entry(
-    command_frame
-)
-
+command_entry = tk.Entry(command_frame)
 command_entry.pack(
     side="left",
     fill="x",
@@ -646,64 +598,38 @@ command_entry.pack(
     padx=5
 )
 
-
 tk.Button(
     command_frame,
     text="SEND",
     command=send_command
-).pack(
-    side="right"
-)
-
+).pack(side="right")
 
 command_entry.bind(
     "<Return>",
     lambda event: send_command()
 )
 
-file_tab = tk.Frame(
-    tabs
-)
-
-tabs.add(
-    file_tab,
-    text="File Browser"
-)
-
+file_tab = tk.Frame(tabs)
+tabs.add(file_tab, text="File Browser")
 
 tk.Label(
     file_tab,
     text="Đường dẫn:"
-).pack(
-    pady=5
-)
+).pack(pady=5)
 
-
-path_frame = tk.Frame(
-    file_tab
-)
-
+path_frame = tk.Frame(file_tab)
 path_frame.pack(
     fill="x",
     padx=10
 )
 
-
-path_entry = tk.Entry(
-    path_frame
-)
-
-path_entry.insert(
-    0,
-    "."
-)
-
+path_entry = tk.Entry(path_frame)
+path_entry.insert(0, ".")
 path_entry.pack(
     side="left",
     fill="x",
     expand=True
 )
-
 
 tk.Button(
     path_frame,
@@ -714,11 +640,7 @@ tk.Button(
     padx=5
 )
 
-
-file_text = tk.Text(
-    file_tab
-)
-
+file_text = tk.Text(file_tab)
 file_text.pack(
     fill="both",
     expand=True,
@@ -726,30 +648,16 @@ file_text.pack(
     pady=10
 )
 
-
-task_tab = tk.Frame(
-    tabs
-)
-
-tabs.add(
-    task_tab,
-    text="Task Manager"
-)
-
+task_tab = tk.Frame(tabs)
+tabs.add(task_tab, text="Task Manager")
 
 tk.Button(
     task_tab,
     text="REFRESH",
     command=refresh_tasks
-).pack(
-    pady=8
-)
+).pack(pady=8)
 
-
-pid_frame = tk.Frame(
-    task_tab
-)
-
+pid_frame = tk.Frame(task_tab)
 pid_frame.pack(
     fill="x",
     padx=10,
@@ -759,15 +667,9 @@ pid_frame.pack(
 tk.Label(
     pid_frame,
     text="PID:"
-).pack(
-    side="left"
-)
+).pack(side="left")
 
-
-pid_entry = tk.Entry(
-    pid_frame
-)
-
+pid_entry = tk.Entry(pid_frame)
 pid_entry.pack(
     side="left",
     fill="x",
@@ -779,15 +681,9 @@ tk.Button(
     pid_frame,
     text="END TASK",
     command=end_task
-).pack(
-    side="right"
-)
+).pack(side="right")
 
-
-task_text = tk.Text(
-    task_tab
-)
-
+task_text = tk.Text(task_tab)
 task_text.pack(
     fill="both",
     expand=True,
@@ -797,10 +693,7 @@ task_text.pack(
 
 
 def close_window():
-
-    if client is not None:
-        disconnect_server()
-
+    close_client_socket()
     window.destroy()
 
 
