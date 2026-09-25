@@ -1,6 +1,6 @@
 import socket
 
-DEFAULT_TIMEOUT = 10.0
+DEFAULT_TIMEOUT = 60.0
 
 
 def set_timeout(sock: socket.socket, seconds: float = DEFAULT_TIMEOUT) -> None:
