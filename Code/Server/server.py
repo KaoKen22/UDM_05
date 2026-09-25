@@ -24,6 +24,7 @@ from protocol import (
 from command_execution import execute_command
 from logger import logger
 from server_gui import ask_permission
+from time_out import safe_recv_with_timeout, safe_send_with_timeout
 
 HOST = "0.0.0.0"
 PORT = 5000
@@ -43,7 +44,17 @@ def handle_client(client_socket, client_address):
 
     try:
         while True:
-            data = client_socket.recv(4096)
+            data = safe_recv_with_timeout(
+                client_socket,
+                4096
+            )
+
+            if data is None:
+                logger.warning(
+                    f"[TIMEOUT] Client {client_ip}:{client_port} "
+                    "khong gui du lieu trong thoi gian cho phep."
+                )
+                break
 
             if not data:
                 logger.info(
@@ -100,7 +111,8 @@ def handle_client(client_socket, client_address):
                         f"Exit code: {result['exit_code']}"
                     )
 
-                client_socket.sendall(
+                safe_send_with_timeout(
+                    client_socket,
                     response.encode("utf-8")
                 )
 
@@ -142,7 +154,8 @@ def handle_client(client_socket, client_address):
                         "[LIST_DIR] Khong the lay danh sach thu muc."
                     )
 
-                client_socket.sendall(
+                safe_send_with_timeout(
+                    client_socket,
                     response.encode("utf-8")
                 )
 
@@ -158,7 +171,8 @@ def handle_client(client_socket, client_address):
                     "Server da ngat ket noi"
                 )
 
-                client_socket.sendall(
+                safe_send_with_timeout(
+                    client_socket,
                     response.encode("utf-8")
                 )
 
@@ -181,7 +195,8 @@ def handle_client(client_socket, client_address):
                     "Action khong hop le"
                 )
 
-                client_socket.sendall(
+                safe_send_with_timeout(
+                    client_socket,
                     response.encode("utf-8")
                 )
 
@@ -262,7 +277,8 @@ while True:
             "Ket noi bi tu choi boi Server"
         )
 
-        client_socket.sendall(
+        safe_send_with_timeout(
+            client_socket,
             response.encode("utf-8")
         )
 
@@ -292,7 +308,8 @@ while True:
         "Ket noi duoc Server cho phep"
     )
 
-    client_socket.sendall(
+    safe_send_with_timeout(
+        client_socket,
         response.encode("utf-8")
     )
 
