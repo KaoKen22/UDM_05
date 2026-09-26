@@ -27,9 +27,9 @@ phancong_UDM_05_dieukhientuxa.xlsx
 - **Test kết nối:** Kiểm tra xác nhận kết nối, từ chối kết nối và ngắt kết nối.
 - **Stress Test:** Kiểm tra Server khi nhiều Client kết nối và gửi yêu cầu đồng thời.
 - **Performance Test:** Kiểm tra thời gian phản hồi và khả năng xử lý yêu cầu.
-- **Bằng chứng kiểm thử:** Lưu tại thư mục `Extra/`.
+- **Bằng chứng kiểm thử:** Lưu tại thư mục `Extra/ UDM_05_Test_Cases.xlsx`.
 
 ## Demo
 
-- Video: [Public hoặc Unlisted URL]
-- Báo cáo: `DOCX/`
+- Video: [https://www.youtube.com/watch?v=JciP4F3znBk]
+- Báo cáo: `DOCX/ Báo cáo LTM nhóm 5.docx`
