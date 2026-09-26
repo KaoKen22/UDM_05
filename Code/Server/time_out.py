@@ -1,14 +1,15 @@
 import socket
 
+# 1. Cấu hình hằng số thời gian chờ mặc định
 DEFAULT_TIMEOUT = 60.0
 
-
+# 2. Hàm thiết lập thời gian chờ cơ bản cho Socket
 def set_timeout(sock: socket.socket, seconds: float = DEFAULT_TIMEOUT) -> None:
     """Cấu hình thời gian chờ để chống treo Server/Client."""
     if isinstance(sock, socket.socket):
         sock.settimeout(seconds)
 
-
+# 3. Hàm xử lý nhận dữ liệu an toàn (Safe Receive) kèm bắt lỗi mạng
 def safe_recv_with_timeout(sock: socket.socket, bufsize: int = 1024, timeout: float = DEFAULT_TIMEOUT) -> bytes | None:
     """
     Nhận dữ liệu an toàn:
@@ -32,7 +33,7 @@ def safe_recv_with_timeout(sock: socket.socket, bufsize: int = 1024, timeout: fl
 
     return None
 
-
+# 4. Hàm xử lý gửi dữ liệu an toàn (Safe Send) kèm bắt lỗi mạng
 def safe_send_with_timeout(sock: socket.socket, data: bytes, timeout: float = DEFAULT_TIMEOUT) -> bool:
     """
     Gửi dữ liệu an toàn:
