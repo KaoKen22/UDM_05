@@ -1,66 +1,90 @@
 import json
 
-# ==========================================
-# 1. ĐỊNH NGHĨA CÁC HẰNG SỐ (CONSTANTS)
-# ==========================================
 ACTION_EXECUTE = "EXECUTE"
 ACTION_LIST_DIR = "LIST_DIR"
+ACTION_STOP = "STOP"
 ACTION_DISCONNECT = "DISCONNECT"
 
 STATUS_SUCCESS = "SUCCESS"
 STATUS_ERROR = "ERROR"
 
 
-# ==========================================
-# 2. CÁC HÀM XỬ LÝ DỮ LIỆU (FUNCTIONS)
-# ==========================================
-
-def build_request(action: str, payload: dict = None) -> str:
-    """Đóng gói yêu cầu từ Client thành chuỗi JSON"""
-    if payload is None:
-        payload = {}
-    return json.dumps({"action": action, "payload": payload}, ensure_ascii=False)
+def build_request(action, payload=None):
+    message = {
+        "action": action,
+        "payload": payload if payload is not None else {}
+    }
+    return json.dumps(message, ensure_ascii=False) + "\n"
 
 
-def build_execute_request(command: str) -> str:
-    """Hàm tiện ích: Đóng gói request chạy lệnh CMD (ACTION_EXECUTE)"""
+def build_execute_request(command):
     return build_request(ACTION_EXECUTE, {"command": command})
 
 
-def build_list_dir_request(path: str = ".") -> str:
-    """Hàm tiện ích Tuần 2: Đóng gói request xem danh sách thư mục (ACTION_LIST_DIR)"""
+def build_list_dir_request(path):
     return build_request(ACTION_LIST_DIR, {"path": path})
 
 
-def parse_request(data_str: str) -> dict:
-    """Giải mã chuỗi JSON yêu cầu từ Client thành Dictionary"""
+def build_stop_request():
+    return build_request(ACTION_STOP)
+
+
+def parse_request(data_str):
     try:
         data = json.loads(data_str)
+        if not isinstance(data, dict):
+            raise ValueError("Request phải là JSON object.")
+
+        action = data.get("action")
+        payload = data.get("payload", {})
+
+        if not isinstance(action, str) or not action:
+            raise ValueError("Thiếu action hợp lệ.")
+
+        if not isinstance(payload, dict):
+            raise ValueError("payload phải là JSON object.")
+
         return {
-            "action": data.get("action", "UNKNOWN"),
-            "payload": data.get("payload", {})
+            "action": action,
+            "payload": payload
         }
-    except Exception:
-        return {"action": "UNKNOWN", "payload": {}}
+    except (json.JSONDecodeError, ValueError, TypeError) as error:
+        return {
+            "action": "UNKNOWN",
+            "payload": {},
+            "parse_error": str(error)
+        }
 
 
-def build_response(status: str, output: str = "", message: str = "") -> str:
-    """Đóng gói phản hồi từ Server trả về Client thành chuỗi JSON"""
-    response_data = {
+def build_response(status, output="", message="", error="", exit_code=None):
+    response = {
         "status": status,
         "output": output,
-        "message": message
+        "message": message,
+        "error": error,
+        "exit_code": exit_code
     }
-    return json.dumps(response_data, ensure_ascii=False)
+    return json.dumps(response, ensure_ascii=False) + "\n"
 
 
-def parse_response(data_str: str) -> dict:
-    """Giải mã chuỗi JSON phản hồi từ Server thành Dictionary"""
+def parse_response(data_str):
     try:
-        return json.loads(data_str)
-    except Exception:
+        data = json.loads(data_str)
+        if not isinstance(data, dict):
+            raise ValueError("Response phải là JSON object.")
+
+        return {
+            "status": data.get("status", STATUS_ERROR),
+            "output": data.get("output", ""),
+            "message": data.get("message", ""),
+            "error": data.get("error", ""),
+            "exit_code": data.get("exit_code", None)
+        }
+    except (json.JSONDecodeError, ValueError, TypeError) as error:
         return {
             "status": STATUS_ERROR,
             "output": "",
-            "message": "Dữ liệu JSON không hợp lệ"
+            "message": "Response không hợp lệ.",
+            "error": str(error),
+            "exit_code": None
         }
